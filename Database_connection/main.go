@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/aditilondhe07/school-api/ent"
+	"github.com/aditilondhe07/theschool-api/ent"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql" // Import the MySQL driver
 )
