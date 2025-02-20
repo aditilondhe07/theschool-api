@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/aditilondhe07/school-api/ent"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql" // Import the MySQL driver
-	"github.com/yourusername/school-api/ent"
 )
 
 func main() {
