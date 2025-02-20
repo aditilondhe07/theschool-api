@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"yourmodule/ent"
+	"theschool-api/ent"
 
 	"github.com/aditilondhe07/theschool-api/ent/class"
 	"github.com/gin-gonic/gin"

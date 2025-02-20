@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/aditilondhe07/school-api/ent"
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/school-api/ent"
 )
 
 // createTeacher creates a new teacher.

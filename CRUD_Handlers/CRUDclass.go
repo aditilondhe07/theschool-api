@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"yourmodule/ent"
-	"yourmodule/ent/teacher"
+	"theschool-api/ent"
+	"theschoolapi/ent/teacher"
 
 	"github.com/gin-gonic/gin"
 )
