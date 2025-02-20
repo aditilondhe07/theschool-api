@@ -12,7 +12,7 @@ import (
 
 func main() {
 	// Replace these with your MySQL credentials and database name.
-	dsn := "aditilondhe07:Venkatesh@777@tcp(127.0.0.1:3306)/theschool-api?parseTime=True"
+	dsn := "root:Venkatesh@777@tcp(127.0.0.1:3306)/theschool-apiparseTime=True"
 	client, err := ent.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("failed opening connection to mysql: %v", err)
