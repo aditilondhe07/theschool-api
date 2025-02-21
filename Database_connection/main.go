@@ -1,32 +1,33 @@
+
 package main
 
 import (
-	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/aditilondhe07/theschool-api/ent"
+	"context"
+	"github.com/go-sql-driver/mysql"
 )
 
-var db *sql.DB
+var client *ent.Client
 
 func main() {
-	// Database connection
+	// Set up the connection to the database using Ent
 	var err error
-	db, err = sql.Open("mysql", "aditilondhe07:Venkatesh@777@tcp(192.168.0.144)/theschool-api")
+	client, err = ent.Open("mysql", "aditilondhe07:Venkatesh@777@tcp(192.168.0.144)/theschool_api")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("failed opening connection to mysql: %v", err)
+	}
+	defer client.Close()
+
+	// Ping the database to check the connection
+	if err := client.Ping(); err != nil {
+		log.Fatalf("failed pinging database: %v", err)
 	}
 
-	defer db.Close()
-
-	err = db.Ping()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("Connected to the database!")
+	log.Println("Successfully connected to the database!")
 
 	// Routes
 	http.HandleFunc("/teachers", teachersHandler)
@@ -38,71 +39,285 @@ func main() {
 
 // Teacher struct
 type Teacher struct {
-	ID      int    `json:"id"`
-	Name    string `json:"name"`
-	Subject string `json:"subject"`
+	ID      int    json:"id"
+	Name    string json:"name"
+	Subject string json:"subject"
 }
 
 // Class struct
 type Class struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	TeacherID int    `json:"teacher_id"`
+	ID        int    json:"id"
+	Name      string json:"name"
+	TeacherID int    json:"teacher_id"
 }
 
 // Student struct
 type Student struct {
-	ID      int    `json:"id"`
-	Name    string `json:"name"`
-	ClassID int    `json:"class_id"`
+	ID      int    json:"id"
+	Name    string json:"name"
+	ClassID int    json:"class_id"
 }
 
-// CRUD Handlers
+// CRUD Handlers for Teachers
 
-// teachersHandler handles requests for the /teachers endpoint
 func teachersHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		// Retrieve list of teachers
+		getTeachers(w, r)
 	case "POST":
-		// Add a new teacher
+		createTeacher(w, r)
 	case "PUT":
-		// Update a teacher
+		updateTeacher(w, r)
 	case "DELETE":
-		// Delete a teacher
+		deleteTeacher(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-// classesHandler handles requests for the /classes endpoint
+func createTeacher(w http.ResponseWriter, r *http.Request) {
+	var teacher Teacher
+	err := json.NewDecoder(r.Body).Decode(&teacher)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	createdTeacher, err := client.Teacher.
+		Create().
+		SetName(teacher.Name).
+		SetSubject(teacher.Subject).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(createdTeacher)
+}
+
+func getTeachers(w http.ResponseWriter, r *http.Request) {
+	teachers, err := client.Teacher.
+		Query().
+		All(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(teachers)
+}
+
+func updateTeacher(w http.ResponseWriter, r *http.Request) {
+	var teacher Teacher
+	err := json.NewDecoder(r.Body).Decode(&teacher)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	updatedTeacher, err := client.Teacher.
+		UpdateOneID(teacher.ID).
+		SetName(teacher.Name).
+		SetSubject(teacher.Subject).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updatedTeacher)
+}
+
+func deleteTeacher(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	_, err := client.Teacher.
+		Delete().
+		Where(ent.ID(id)).
+		Exec(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// CRUD Handlers for Classes
+
 func classesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		// Retrieve list of classes
+		getClasses(w, r)
 	case "POST":
-		// Add a new class
+		createClass(w, r)
 	case "PUT":
-		// Update a class
+		updateClass(w, r)
 	case "DELETE":
-		// Delete a class
+		deleteClass(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-// studentsHandler handles requests for the /students endpoint
+func createClass(w http.ResponseWriter, r *http.Request) {
+	var class Class
+	err := json.NewDecoder(r.Body).Decode(&class)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	createdClass, err := client.Class.
+		Create().
+		SetName(class.Name).
+		SetTeacherID(class.TeacherID).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(createdClass)
+}
+
+func getClasses(w http.ResponseWriter, r *http.Request) {
+	classes, err := client.Class.
+		Query().
+		All(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(classes)
+}
+
+func updateClass(w http.ResponseWriter, r *http.Request) {
+	var class Class
+	err := json.NewDecoder(r.Body).Decode(&class)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	updatedClass, err := client.Class.
+		UpdateOneID(class.ID).
+		SetName(class.Name).
+		SetTeacherID(class.TeacherID).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updatedClass)
+}
+
+func deleteClass(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	_, err := client.Class.
+		Delete().
+		Where(ent.ID(id)).
+		Exec(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// CRUD Handlers for Students
+
 func studentsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		// Retrieve list of students
+		getStudents(w, r)
 	case "POST":
-		// Add a new student
+		createStudent(w, r)
 	case "PUT":
-		// Update a student
+		updateStudent(w, r)
 	case "DELETE":
-		// Delete a student
+		deleteStudent(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+func createStudent(w http.ResponseWriter, r *http.Request) {
+	var student Student
+	err := json.NewDecoder(r.Body).Decode(&student)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	createdStudent, err := client.Student.
+		Create().
+		SetName(student.Name).
+		SetClassID(student.ClassID).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(createdStudent)
+}
+
+func getStudents(w http.ResponseWriter, r *http.Request) {
+	students, err := client.Student.
+		Query().
+		All(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(students)
+}
+
+func updateStudent(w http.ResponseWriter, r *http.Request) {
+	var student Student
+	err := json.NewDecoder(r.Body).Decode(&student)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	updatedStudent, err := client.Student.
+		UpdateOneID(student.ID).
+		SetName(student.Name).
+		SetClassID(student.ClassID).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updatedStudent)
+}
+
+func deleteStudent(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	_, err := client.Student.
+		Delete().
+		Where(ent.ID(id)).
+		Exec(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+} 
