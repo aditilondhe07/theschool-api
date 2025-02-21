@@ -14,7 +14,7 @@ var db *sql.DB
 func main() {
 	// Database connection
 	var err error
-	db, err = sql.Open("mysql", "aditilondhe07:<Venkatesh@777:YES>@tcp(127.0.0.1:3306)/<theschool-api>")
+	db, err = sql.Open("mysql", "aditilondhe07:Venkatesh@777@tcp(127.0.0.1:3306)/theschool-api")
 	if err != nil {
 		log.Fatal(err)
 	}
