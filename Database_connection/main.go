@@ -1,33 +1,33 @@
-
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"github.com/aditilondhe07/theschool-api/ent"
-	"context"
-	"github.com/go-sql-driver/mysql"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
-var client *ent.Client
+var db *sql.DB
 
 func main() {
-	// Set up the connection to the database using Ent
+	// Database connection
 	var err error
-	client, err = ent.Open("mysql", "aditilondhe07:Venkatesh@777@tcp(192.168.0.144)/theschool_api")
+	db, err = sql.Open("mysql", "aditilondhe07:Venkatesh@777@tcp(192.168.0.144)/theschool_api")
 	if err != nil {
-		log.Fatalf("failed opening connection to mysql: %v", err)
-	}
-	defer client.Close()
-
-	// Ping the database to check the connection
-	if err := client.Ping(); err != nil {
-		log.Fatalf("failed pinging database: %v", err)
+		log.Fatal(err)
 	}
 
-	log.Println("Successfully connected to the database!")
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Connected to the database!")
 
 	// Routes
 	http.HandleFunc("/teachers", teachersHandler)
@@ -39,27 +39,28 @@ func main() {
 
 // Teacher struct
 type Teacher struct {
-	ID      int    json:"id"
-	Name    string json:"name"
-	Subject string json:"subject"
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Subject string `json:"subject"`
 }
 
 // Class struct
 type Class struct {
-	ID        int    json:"id"
-	Name      string json:"name"
-	TeacherID int    json:"teacher_id"
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	TeacherID int    `json:"teacher_id"`
 }
 
 // Student struct
 type Student struct {
-	ID      int    json:"id"
-	Name    string json:"name"
-	ClassID int    json:"class_id"
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	ClassID int    `json:"class_id"`
 }
 
-// CRUD Handlers for Teachers
+// CRUD Handlers
 
+// teachersHandler handles requests for the /teachers endpoint
 func teachersHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -75,6 +76,7 @@ func teachersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// createTeacher handles POST requests to add a new teacher
 func createTeacher(w http.ResponseWriter, r *http.Request) {
 	var teacher Teacher
 	err := json.NewDecoder(r.Body).Decode(&teacher)
@@ -83,33 +85,42 @@ func createTeacher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdTeacher, err := client.Teacher.
-		Create().
-		SetName(teacher.Name).
-		SetSubject(teacher.Subject).
-		Save(r.Context())
+	query := "INSERT INTO teachers (name, subject) VALUES (?, ?)"
+	_, err = db.Exec(query, teacher.Name, teacher.Subject)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createdTeacher)
+	json.NewEncoder(w).Encode(teacher)
 }
 
+// getTeachers handles GET requests to retrieve all teachers
 func getTeachers(w http.ResponseWriter, r *http.Request) {
-	teachers, err := client.Teacher.
-		Query().
-		All(r.Context())
+	rows, err := db.Query("SELECT id, name, subject FROM teachers")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	defer rows.Close()
+
+	var teachers []Teacher
+	for rows.Next() {
+		var teacher Teacher
+		err := rows.Scan(&teacher.ID, &teacher.Name, &teacher.Subject)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		teachers = append(teachers, teacher)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(teachers)
 }
 
+// updateTeacher handles PUT requests to update an existing teacher
 func updateTeacher(w http.ResponseWriter, r *http.Request) {
 	var teacher Teacher
 	err := json.NewDecoder(r.Body).Decode(&teacher)
@@ -118,26 +129,22 @@ func updateTeacher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedTeacher, err := client.Teacher.
-		UpdateOneID(teacher.ID).
-		SetName(teacher.Name).
-		SetSubject(teacher.Subject).
-		Save(r.Context())
+	query := "UPDATE teachers SET name = ?, subject = ? WHERE id = ?"
+	_, err = db.Exec(query, teacher.Name, teacher.Subject, teacher.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(updatedTeacher)
+	json.NewEncoder(w).Encode(teacher)
 }
 
+// deleteTeacher handles DELETE requests to remove a teacher
 func deleteTeacher(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	_, err := client.Teacher.
-		Delete().
-		Where(ent.ID(id)).
-		Exec(r.Context())
+	query := "DELETE FROM teachers WHERE id = ?"
+	_, err := db.Exec(query, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -146,8 +153,7 @@ func deleteTeacher(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// CRUD Handlers for Classes
-
+// classesHandler handles requests for the /classes endpoint
 func classesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -163,6 +169,7 @@ func classesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// createClass handles POST requests to add a new class
 func createClass(w http.ResponseWriter, r *http.Request) {
 	var class Class
 	err := json.NewDecoder(r.Body).Decode(&class)
@@ -171,33 +178,42 @@ func createClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdClass, err := client.Class.
-		Create().
-		SetName(class.Name).
-		SetTeacherID(class.TeacherID).
-		Save(r.Context())
+	query := "INSERT INTO classes (name, teacher_id) VALUES (?, ?)"
+	_, err = db.Exec(query, class.Name, class.TeacherID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createdClass)
+	json.NewEncoder(w).Encode(class)
 }
 
+// getClasses handles GET requests to retrieve all classes
 func getClasses(w http.ResponseWriter, r *http.Request) {
-	classes, err := client.Class.
-		Query().
-		All(r.Context())
+	rows, err := db.Query("SELECT id, name, teacher_id FROM classes")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	defer rows.Close()
+
+	var classes []Class
+	for rows.Next() {
+		var class Class
+		err := rows.Scan(&class.ID, &class.Name, &class.TeacherID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		classes = append(classes, class)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(classes)
 }
 
+// updateClass handles PUT requests to update an existing class
 func updateClass(w http.ResponseWriter, r *http.Request) {
 	var class Class
 	err := json.NewDecoder(r.Body).Decode(&class)
@@ -206,26 +222,22 @@ func updateClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedClass, err := client.Class.
-		UpdateOneID(class.ID).
-		SetName(class.Name).
-		SetTeacherID(class.TeacherID).
-		Save(r.Context())
+	query := "UPDATE classes SET name = ?, teacher_id = ? WHERE id = ?"
+	_, err = db.Exec(query, class.Name, class.TeacherID, class.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(updatedClass)
+	json.NewEncoder(w).Encode(class)
 }
 
+// deleteClass handles DELETE requests to remove a class
 func deleteClass(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	_, err := client.Class.
-		Delete().
-		Where(ent.ID(id)).
-		Exec(r.Context())
+	query := "DELETE FROM classes WHERE id = ?"
+	_, err := db.Exec(query, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -234,8 +246,7 @@ func deleteClass(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// CRUD Handlers for Students
-
+// studentsHandler handles requests for the /students endpoint
 func studentsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -251,6 +262,31 @@ func studentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// getStudents handles GET requests to retrieve all students
+func getStudents(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT id, name, class_id FROM students")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var students []Student
+	for rows.Next() {
+		var student Student
+		err := rows.Scan(&student.ID, &student.Name, &student.ClassID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		students = append(students, student)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(students)
+}
+
+// createStudent handles POST requests to add a new student
 func createStudent(w http.ResponseWriter, r *http.Request) {
 	var student Student
 	err := json.NewDecoder(r.Body).Decode(&student)
@@ -259,33 +295,18 @@ func createStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdStudent, err := client.Student.
-		Create().
-		SetName(student.Name).
-		SetClassID(student.ClassID).
-		Save(r.Context())
+	query := "INSERT INTO students (name, class_id) VALUES (?, ?)"
+	_, err = db.Exec(query, student.Name, student.ClassID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createdStudent)
+	json.NewEncoder(w).Encode(student)
 }
 
-func getStudents(w http.ResponseWriter, r *http.Request) {
-	students, err := client.Student.
-		Query().
-		All(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(students)
-}
-
+// updateStudent handles PUT requests to update an existing student
 func updateStudent(w http.ResponseWriter, r *http.Request) {
 	var student Student
 	err := json.NewDecoder(r.Body).Decode(&student)
@@ -294,30 +315,26 @@ func updateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedStudent, err := client.Student.
-		UpdateOneID(student.ID).
-		SetName(student.Name).
-		SetClassID(student.ClassID).
-		Save(r.Context())
+	query := "UPDATE students SET name = ?, class_id = ? WHERE id = ?"
+	_, err = db.Exec(query, student.Name, student.ClassID, student.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(updatedStudent)
+	json.NewEncoder(w).Encode(student)
 }
 
+// deleteStudent handles DELETE requests to remove a student
 func deleteStudent(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	_, err := client.Student.
-		Delete().
-		Where(ent.ID(id)).
-		Exec(r.Context())
+	query := "DELETE FROM students WHERE id = ?"
+	_, err := db.Exec(query, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-} 
+}
